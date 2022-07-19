@@ -2,19 +2,35 @@ const Product = require("../models/product");
 const { validationResult } = require("express-validator");
 const fileHelper = require("../models/product");
 const Place = require("../models/place");
+const Category = require("../models/category");
+const Type = require("../models/type");
 
 // get products per place 
 exports.getProducts = async (req, res, next) => {
   const placeId = req.body.placeId;
   const categoryId = req.body.categoryId;
+  const typeId = req.body.typeId;
 
+  let queryObject = {userId: req.userId};
+
+  if(placeId) {
+    queryObject.placeId = placeId;
+  }
+
+  if(typeId) {
+    queryObject.typeId = typeId;
+  }
+
+  if(categoryId) {
+    queryObject.categoryId = categoryId;
+  }
 
   let products = [];
   let totalItems = 0;
 
 
   try {
-    products = await Product.findAll({'where': {'userid': req.userId }});
+    products = await Product.findAll({'where': queryObject});
 
     if(categoryId) {
       products = products.filter((product) => {
@@ -63,20 +79,66 @@ exports.createProduct = async (req, res, next) => {
       throw error;
     }
 
+    const place = await Place.findByPk(req.body.placeId);
+
+    if(place.userId !== req.userId) {
+      const error = new Error("Not authorized!");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const type = await Type.findByPk(req.body.typeId);
+
+    if(!type) {
+      const error = new Error("Invalid type");
+      error.statusCode = 400;
+      throw error;
+    }
+
+
+    if(type.placeId !== place.id) {
+      const error = new Error("The type is not from the selected place");
+      error.statusCode = 400;
+      throw error;
+    } 
+
+    const category = await Category.findByPk(req.body.categoryId);
+
+    
+    if(!category) {
+      const error = new Error("Invalid category");
+      error.statusCode = 400;
+      throw error;
+    }
+
+
+    if(type.categoryId !== category.id) {
+      const error = new Error("The type is not from the selected category");
+      error.statusCode = 400;
+      throw error;
+    }
+
     // if(!req.file) {
     //     const error = new Error("No image provided!");
     //     error.statusCode = 422;
     //     throw error;
     // }
+
+
+
   } catch (error) {
     next(error);
     return;
   }
 
+
   const title = req.body.title;
   const imageUrl = req.body.imageUrl;
   const price = req.body.price;
   const description = req.body.description;
+  const placeId = req.body.placeId;
+  const categoryId = req.body.categoryId;
+  const typeId = req.body.typeId;
 
   try {
     const product = await Product.create({
@@ -85,6 +147,9 @@ exports.createProduct = async (req, res, next) => {
       imageUrl: imageUrl,
       description: description,
       userId: req.userId,
+      placeId: placeId,
+      categoryId: categoryId,
+      typeId: typeId
     });
 
     res.status(200).json({
@@ -123,15 +188,53 @@ exports.editProduct = async (req, res, next) => {
       throw error;
     }
 
+
+    const type = await Type.findByPk(req.body.typeId);
+
+    if(!type) {
+      const error = new Error("Invalid type");
+      error.statusCode = 400;
+      throw error;
+    }
+
+
+    if(type.placeId !== place.id) {
+      const error = new Error("The type is not from the selected place");
+      error.statusCode = 400;
+      throw error;
+    } 
+
+    const category = await Category.findByPk(req.body.categoryId);
+
+    
+    if(!category) {
+      const error = new Error("Invalid category");
+      error.statusCode = 400;
+      throw error;
+    }
+
+
+    if(type.categoryId !== category.id) {
+      const error = new Error("The type is not from the selected category");
+      error.statusCode = 400;
+      throw error;
+    }
+
     const updatedTitle = req.body.title;
     const updatedPrice = req.body.price;
     const updatedImageUrl = req.body.imageUrl;
     const updatedDescription = req.body.description;
+    const updatedTypeId = req.body.typeId;
+    const updatedCategoryId = req.body.categoryId;
+    const updatedPlaceId = req.body.placeId;
 
     product.title = updatedTitle;
     product.price = updatedPrice;
     product.imageUrl = updatedImageUrl;
     product.description = updatedDescription;
+    product.typeId = updatedTypeId;
+    product.categoryId = updatedCategoryId;
+    product.placeId = updatedPlaceId;
 
     await product.save();
 
@@ -236,6 +339,12 @@ exports.getPlace = async (req, res, next) => {
 exports.addPlace = async (req, res, next) => {
   const errors = validationResult(req);
 
+  if(!req.isOwner) {
+    const error = new Error("Not authorized!");
+    error.statusCode = 403;
+    next(error);
+  }
+
   try {
     if (!errors.isEmpty()) {
       const error = new Error("Validation failed, entered data is incorrect.");
@@ -276,7 +385,16 @@ exports.addPlace = async (req, res, next) => {
 
 exports.editPlace = async (req, res, next) => {
   const placeId = req.params.placeId;
+  
+  if(!req.isOwner) {
+    const error = new Error("Not authorized!");
+    error.statusCode = 403;
+    next(error);
+  }
+  
   const errors = validationResult(req);
+
+
 
   try {
     if (!errors.isEmpty()) {
@@ -324,6 +442,13 @@ exports.editPlace = async (req, res, next) => {
 
 exports.deletePlace = async (req, res, next) => {
   const placeId = req.params.placeId;
+  
+  if(!req.isOwner) {
+    const error = new Error("Not authorized!");
+    error.statusCode = 403;
+    next(error);
+  }
+  
   try {
     const place = await Place.findByPk(placeId);
 
@@ -356,23 +481,176 @@ exports.deletePlace = async (req, res, next) => {
 //// CATEGORY
 
 exports.getCategories = async (req, res, next) => {
+  let categories = [];
+  let totalItems = 0;
+
+
+  try {
+
+    categories = Category.findAll();
+
+    if(!categories || categories.length === 0) {
+      const error = new Error("There is no category available");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    res.status(200).json({
+      categories: categories,
+      totalItems: totalItems
+    });
+
+  } catch (error) {
+    next(error);
+  }
 
 }
 
 exports.getCategory = async (req, res, next) => {
+  const categoryId = req.params.categoryId;
 
+  try {
+    
+    const category = Category.findByPk(categoryId);
+
+    if(!category) {
+      const error = new Error("Category is not availble!");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    res.status(200).json({
+      category: category
+    })
+
+  } catch(error) {
+    next(error);
+  }
 }
 
 exports.addCategory = async (req, res, next) => {
+  const errors = validationResult(req);
 
+  if(!req.isAdmin) {
+    const error = new Error("Not authorized!");
+    error.statusCode = 403;
+    next(error);
+  }
+
+  try {
+    if (!errors.isEmpty()) {
+      const error = new Error("Validation failed, entered data is incorrect.");
+      error.status = 422;
+      error.data = errors.array();
+      throw error;
+    }
+
+  } catch (error) {
+    next(error);
+    return;
+  }
+
+  const title = req.body.title;
+  const description = req.body.description;
+  
+  try {
+
+    const category = await Category.create({
+      title: title,
+      description: description
+    });
+
+    res.status(200).json({
+      category: category
+    });
+
+  } catch(error) {
+    next(error);
+  }
 }
 
 exports.editCategory = async (req, res, next) => {
+  const errors = validationResult(req);
 
+  const categoryId = req.params.categoryId;
+
+  if(!req.isAdmin) {
+    const error = new Error("Not authorized!");
+    error.statusCode = 403;
+    next(error);
+  }
+
+  try {
+    if (!errors.isEmpty()) {
+      const error = new Error("Validation failed, entered data is incorrect.");
+      error.status = 422;
+      error.data = errors.array();
+      throw error;
+    }
+
+  } catch (error) {
+    next(error);
+    return;
+  }
+
+  const title = req.body.title;
+  const description = req.body.description;
+
+  try {
+
+    const category = await Category.findByPk(categoryId);
+
+
+
+    if(!category) {
+      const error = new Error("Category does not exist!");
+      error.statusCode = 400;
+      throw error;
+    }
+
+
+    category.title = title;
+    category.description = description;
+    
+    await category.save();
+
+    res.status(200).json({
+      category: category
+    })
+
+  } catch(error) {
+    next(error);
+  }
 }
 
 exports.deleteCategory = async (req, res, next) => {
+  const categoryId = req.params.categoryId;
 
+  if(!req.isAdmin) {
+    const error = new Error("Not authorized!");
+    error.statusCode = 403;
+    next(error);
+  }
+
+
+  try{
+    const category = await Category.findByPk(categoryId);
+    
+    if(!category) {
+      const error = new Error("This category does not exist!");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    await category.destroy();
+
+    res.status(200).json({
+      message: "Category deleted!"
+    });
+
+  } catch(error) {
+    next(error);
+  }
 }
 
 //// END CATEGORY
@@ -380,23 +658,242 @@ exports.deleteCategory = async (req, res, next) => {
 //// TYPE
 
 exports.getTypes = async (req, res, next) => {
+  let types = [];
+  let totalItems = 0;
+  const placeId = req.body.placeId;
+  const categoryId = req.body.categoryId;
 
+
+  try {
+    types = Type.findAll({where: {placeId: placeId, categoryId: categoryId}});
+
+    if(!types || types.length === 0) {
+      const error = new Error("No types are available");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    res.status(200).json({
+      types: types,
+      totalItems: types.length
+    })
+
+  } catch(error) {
+
+  }
 }
 
 exports.getType = async (req, res, next) => {
+  let  typeId = req.params.typeId;
 
+  try {
+    const type = Type.findByPk(typeId);
+
+    if(!type) {
+      const error = "This type does not exist";
+      error.statusCode = 400;
+      throw error;
+    }
+
+    res.status(200).json({
+      type: type
+    });
+  } catch (error) {
+    next(error);
+  }
 }
 
 exports.addType = async (req, res, next) => {
+  const errors = validationResult(req);
 
+  if(!req.isOwner) {
+    const error = new Error("Not authorized!");
+    error.statusCode = 403;
+    next(error);
+  }
+
+  try {
+    if (!errors.isEmpty()) {
+      const error = new Error("Validation failed, entered data is incorrect.");
+      error.status = 422;
+      error.data = errors.array();
+      throw error;
+    }
+
+  } catch (error) {
+    next(error);
+    return;
+  }
+
+  const title = req.body.title;
+  const description = req.body.description;
+  const placeId = req.body.placeId;
+  const categoryId = req.body.categoryId;
+  
+
+
+
+  try {
+
+    const category = await Category.findByPk(categoryId);
+
+    if(!category) {
+      const error = new Error("Category does not exist");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const place = await Place.findByPk(placeId);
+
+    if(!place) {
+      const error = new Error("Place does not exist!");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    if(place.userId !== req.userId) {
+  
+      const error = new Error("Not owner authorized!");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const type = await Type.create({
+      title: title,
+      description: description,
+      userId: req.userId,
+      placeId: placeId,
+      categoryId: categoryId
+    });
+
+    res.status(200).json({
+      type: type
+    });
+
+  } catch(error) {
+    next(error);
+  }
 }
 
 exports.editType = async (req, res, next) => {
+  const errors = validationResult(req);
+ 
+  try {
 
+    if(!req.isOwner) {
+      const error = new Error("Not authorized!");
+      error.statusCode = 403;
+      throw error;
+    }
+  
+    if (!errors.isEmpty()) {
+      const error = new Error("Validation failed, entered data is incorrect.");
+      error.status = 422;
+      error.data = errors.array();
+      throw error;
+    }
+
+  } catch (error) {
+    next(error);
+    return;
+  }
+
+
+  const title = req.body.title;
+  const description = req.body.description;
+  const placeId = req.body.placeId;
+  const categoryId = req.body.categoryId;
+  const typeId = req.params.typeId;
+
+
+
+  try {
+
+    const type = await Type.findByPk(typeId);
+
+    if(!type) {
+      const error = new Error("Type is not available");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const category = await Category.findByPk(categoryId);
+
+    if(!category) {
+      const error = new Error("Category does not exist");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const place = await Place.findByPk(placeId);
+
+    if(!place) {
+      const error = new Error("Place does not exist!");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    if(place.userId !== req.userId) {
+  
+      const error = new Error("Not authorized!");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    type.title = title;
+    type.description = description;  
+    type.categoryId = categoryId;
+    type.placeId = placeId;
+
+    await type.save();
+    
+
+
+    // const type = await Type.create({
+    //   title: title,
+    //   description: description,
+    //   userId: req.userId,
+    //   placeId: placeId,
+    //   categoryId: categoryId
+    // });
+
+    res.status(200).json({
+      type: type
+    });
+
+  } catch(error) {
+    next(error);
+  }
 }
 
 exports.deleteType = async (req, res, next) => {
+  const typeId = req.params.typeId;
 
+  try {
+
+    const type = await Type.findByPk(typeId);
+
+    if(!type) {
+      const error = new Error("This type is not available");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    if(type.userId !== req.userId) {
+      const error = new Error("Not authorized");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    await type.destroy();
+
+    res.status(200).json({
+      message: "Type deleted"
+    })
+
+  } catch(error) {  
+
+  }
 }
 
 //// END TYPE

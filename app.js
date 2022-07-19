@@ -101,24 +101,27 @@ app.use((error, req, res, next) => {
 });
 
 /// Relations
-Product.belongsTo(User, { constraints: true, onDelete: "CASCADE" });
+Product.belongsTo(User, { constraints: true, onDelete: "RESTRICT" });
 User.hasMany(Product);
 
-Product.belongsTo(Category, { constraints: true, onDelete: "CASCADE" });
+Product.belongsTo(Category, { constraints: true, onDelete: "RESTRICT" });
 Category.hasMany(Product);
 
-Product.belongsTo(Type, { constraints: true, onDelete: "CASCADE" });
+Product.belongsTo(Type, { constraints: true, onDelete: "RESTRICT" });
 Type.hasMany(Product);
 
-Type.belongsTo(Category, { constraints: true, onDelete: "CASCADE" });
+Type.belongsTo(Category, { constraints: true, onDelete: "RESTRICT" });
 Category.hasMany(Type);
 
 
-Product.belongsTo(Place, { constraints: true, onDelete: "CASCADE" });
+Product.belongsTo(Place, { constraints: true, onDelete: "RESTRICT" });
 Place.hasMany(Product);
 
-Type.belongsTo(Place, { constraints: true, onDelete: "CASCADE" });
+Type.belongsTo(Place, { constraints: true, onDelete: "RESTRICT" });
 Place.hasMany(Type);
+
+Type.belongsTo(User, {constraints: true, onDelete: "RESTRICT"});
+User.hasMany(Type);
 
 User.hasOne(Cart);
 Cart.belongsTo(User);
@@ -129,13 +132,13 @@ Product.belongsToMany(Cart, { through: CartItem });
 Order.belongsTo(User);
 User.hasMany(Order);
 
-Order.belongsTo(Place, {constraints: true, onDelete: "CASCADE"});
+Order.belongsTo(Place, {constraints: true, onDelete: "RESTRICT"});
 Place.hasMany(Order)
 
-Cart.belongsTo(Place, {constraints: true, onDelete: "CASCADE"});
+Cart.belongsTo(Place, {constraints: true, onDelete: "RESTRICT"});
 Place.hasMany(Cart);
 
-Place.belongsTo(User, {constraints: true, onDelete: "CASCADE"});
+Place.belongsTo(User, {constraints: true, onDelete: "RESTRICT"});
 User.hasMany(Place);
 
 Order.belongsToMany(Product, { through: OrderItem });
@@ -143,10 +146,11 @@ Order.belongsToMany(Product, { through: OrderItem });
 /// End relations
 
 try {
-  //sequelize.sync({force: true});
-  sequelize.sync();
+//sequelize.sync({force: true});
+sequelize.sync();
 } catch (error) {  
   console.log(error);
-}
-
+}   
+       
 app.listen(8080);  
+  
