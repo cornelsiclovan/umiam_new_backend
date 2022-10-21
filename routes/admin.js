@@ -92,6 +92,7 @@ router.post(
 router.put(
     "/places/:placeId",
     isAuth,
+    isOwner,
     [
         body("title").trim().isLength({min: 5}),
         body("location").trim().isLength({min: 5}),
@@ -104,6 +105,7 @@ router.put(
 router.delete(
     "/places/:placeId",
     isAuth,
+    isOwner,
     adminController.deletePlace
 )
 
@@ -161,7 +163,7 @@ router.delete(
 // TYPE ROUTES
 
 router.get(
-    "/types",
+    "/places/:placeId/types",
     isAuth, 
     adminController.getTypes
 );

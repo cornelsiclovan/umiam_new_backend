@@ -7,20 +7,63 @@ const e = require("express");
 const  stripe = require("stripe")(process.env.STRIPE_KEY);
 const PDFDocument = require("pdfkit");
 const OrderItem = require("../models/order-item");
+const Place = require("../models/place");
+
+exports.getPlaces = async (req, res, next) => {
+  let places = [];
+  let totalItems = 0;
+
+  try {
+    places = await Place.findAll();
+
+    totalItems = places.length;
+
+    if(!places || places.length === 0) {
+      const error = new Error("No places are available for your request");
+      throw error;
+    } 
+
+    res.status(200).json({
+      places: places,
+      totalItems: totalItems
+    });
+  } catch (error) {
+    next(error);
+  }
+}
 
 exports.getProducts = async (req, res, next) => {
+  const typeId = req.query.typeId;
+  const categoryId = req.query.categoryId;
+  const placeId = req.query.placeId;
+
   const page = +req.query.page || 1;
+  const items_per_page = +req.query.items_per_page || 10;
+
+  let queryObject = {};
+
+  if(placeId) {
+    queryObject.placeId = placeId;
+  }
+
+  if(typeId) {
+    queryObject.typeId = typeId;
+  }
+
+  if(categoryId) {
+    queryObject.categoryId = categoryId;
+  }
+
 
   let products = [];
   let totalItems = 0;
 
-  const ITEMS_PER_PAGE = 1;
-
   try {
-    totalItems = await Product.count();
-    products = await Product.findAll({offset: page - 1, limit: ITEMS_PER_PAGE});
+    products = await Product.findAll({where: queryObject, offset: page - 1, limit: items_per_page});
+    totalItems = products.length;
 
     res.status(200).json({
+      queryObject: queryObject,
       totalItems: totalItems,
       products: products,
     });
@@ -93,10 +136,19 @@ exports.postCart = async (req, res, next) => {
 
     product = await Product.findByPk(productId);
 
+    if(!product) {
+      const error = new Error("Product does not exist");
+      error.statusCode = 404;
+      throw error;
+    }
+
     await cart.addProduct(product, { through: { quantity: newQuantity } });
+
+    const productsInCart = await cart.getProducts();
 
     res.status(200).json({
       message: "Product added to cart.",
+      productsInCart: productsInCart
     });
   } catch (error) {
     if (!error.statusCode) {
@@ -144,7 +196,11 @@ exports.getOrders = async (req, res, next) => {
 };
 
 exports.postOrder = async (req, res, next) => {
+
+  // for different place add place id at the request
+
   let fetchedCart;
+  const total = req.body.total;
 
   try {
     const user = await User.findByPk(req.userId);
@@ -166,7 +222,11 @@ exports.postOrder = async (req, res, next) => {
       throw error;
     }
 
-    const order = await user.createOrder();
+    const order = await user.createOrder({
+      total: total
+    });
+   
+    
     await order.addProducts(
       products.map((product) => {
         product.orderItem = { quantity: product.cartItem.quantity };
@@ -176,8 +236,15 @@ exports.postOrder = async (req, res, next) => {
 
     await fetchedCart.setProducts(null);
 
+    const userDetails = {
+      name: user.name,
+      email: user.email
+    }
+
 
     res.status(200).json({
+        order: order,
+        user: userDetails,
         message: "Order created."
     });
   } catch (error) {

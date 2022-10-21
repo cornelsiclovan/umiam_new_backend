@@ -3,6 +3,7 @@ const User = require('../models/user');
 
 module.exports = (req, res, next) => {
     const authHeader = req.get('Authorization');
+    
     if(!authHeader) {
         const error = new Error('Not authenticated');
         error.statusCode = 401;
@@ -19,11 +20,13 @@ module.exports = (req, res, next) => {
             error.statusCode = 401;
             throw error;
         }
+
+        req.userId = decodedToken.userId;
     } catch(error) {
         error.statusCode = 500;
         next(error);
     }
 
-    req.userId = decodedToken.userId;
+  
     next();
 }

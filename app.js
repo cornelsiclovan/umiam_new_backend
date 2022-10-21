@@ -71,15 +71,6 @@ const fileFilter = (req, file, cb) => {
 
 app.use(bodyParser.json());
 
-app.use("/admin", adminRoutes);
-app.use(shopRoutes);
-app.use(authRoutes);
-
-app.use(
-  multer({ storage: fileStorage, fileFilter: fileFilter }).single("image")
-);
-
-app.use("/images", express.static(path.join(__dirname, "images")));
 
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -91,6 +82,18 @@ app.use((req, res, next) => {
 
   next();
 });
+
+
+app.use("/admin", adminRoutes);
+app.use(shopRoutes);
+app.use(authRoutes);
+
+app.use(
+  multer({ storage: fileStorage, fileFilter: fileFilter }).single("image")
+);
+
+app.use("/images", express.static(path.join(__dirname, "images")));
+
 
 app.use((error, req, res, next) => {
   const status = error.statusCode || 500;

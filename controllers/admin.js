@@ -7,9 +7,9 @@ const Type = require("../models/type");
 
 // get products per place 
 exports.getProducts = async (req, res, next) => {
-  const placeId = req.body.placeId;
-  const categoryId = req.body.categoryId;
-  const typeId = req.body.typeId;
+  const placeId = req.query.placeId;
+  const categoryId = req.query.categoryId;
+  const typeId = req.query.typeId;
 
   let queryObject = {userId: req.userId};
 
@@ -32,15 +32,11 @@ exports.getProducts = async (req, res, next) => {
   try {
     products = await Product.findAll({'where': queryObject});
 
-    if(categoryId) {
-      products = products.filter((product) => {
-        return product.categoryId !== categoryId
-      })
-    }
-
+    totalItems = products.length;
 
     res.status(200).json({
       products: products,
+      totalItems: totalItems
     });
   } catch (error) {
     next(error);
@@ -339,6 +335,8 @@ exports.getPlace = async (req, res, next) => {
 exports.addPlace = async (req, res, next) => {
   const errors = validationResult(req);
 
+  console.log(req.body);
+
   if(!req.isOwner) {
     const error = new Error("Not authorized!");
     error.statusCode = 403;
@@ -386,6 +384,8 @@ exports.addPlace = async (req, res, next) => {
 exports.editPlace = async (req, res, next) => {
   const placeId = req.params.placeId;
   
+  console.log(req.isOwner);
+
   if(!req.isOwner) {
     const error = new Error("Not authorized!");
     error.statusCode = 403;
@@ -393,8 +393,6 @@ exports.editPlace = async (req, res, next) => {
   }
   
   const errors = validationResult(req);
-
-
 
   try {
     if (!errors.isEmpty()) {
@@ -487,7 +485,7 @@ exports.getCategories = async (req, res, next) => {
 
   try {
 
-    categories = Category.findAll();
+    categories = await Category.findAll();
 
     if(!categories || categories.length === 0) {
       const error = new Error("There is no category available");
@@ -660,12 +658,25 @@ exports.deleteCategory = async (req, res, next) => {
 exports.getTypes = async (req, res, next) => {
   let types = [];
   let totalItems = 0;
-  const placeId = req.body.placeId;
+  const placeId = req.params.placeId;
   const categoryId = req.body.categoryId;
 
+  
+
+  let queryObject = {placeId: placeId};
+
+  if(categoryId) {
+    queryObject.categoryId = categoryId;
+  }
+
+  if(!placeId) {
+    const error = new Error("please provide place id");
+    error.statusCode = 403;
+    next(error);
+  }
 
   try {
-    types = Type.findAll({where: {placeId: placeId, categoryId: categoryId}});
+    types = await Type.findAll({'where': queryObject});
 
     if(!types || types.length === 0) {
       const error = new Error("No types are available");
@@ -679,7 +690,7 @@ exports.getTypes = async (req, res, next) => {
     })
 
   } catch(error) {
-
+    next(error);
   }
 }
 
