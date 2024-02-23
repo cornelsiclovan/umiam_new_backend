@@ -6,7 +6,7 @@ const swaggerJSDoc = require("swagger-jsdoc");
 const sequelize = require("./util/database");
 const Product = require("./models/product");
 const User = require("./models/user");
-
+const fs = require("fs");
 const multer = require("multer");
 
 const authRoutes = require("./routes/auth");
@@ -52,12 +52,14 @@ const fileStorage = multer.diskStorage({
     cb(null, "images");
   },
   filename: (req, file, cb) => {
+    console.log(file);
     const date = new Date().toISOString().replace(/:/g, "-");
     cb(null, date + "-" + file.originalname);
   },
 });
 
 const fileFilter = (req, file, cb) => {
+  console.log(file);
   if (
     file.mimetype === "image/png" ||
     file.mimetype === "image/jpg" ||
@@ -71,7 +73,6 @@ const fileFilter = (req, file, cb) => {
 
 app.use(bodyParser.json());
 
-
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader(
@@ -83,22 +84,22 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use("/images", express.static(path.join(__dirname, "images")));
 
 app.use("/admin", adminRoutes);
 app.use(shopRoutes);
 app.use(authRoutes);
 
-app.use(
-  multer({ storage: fileStorage, fileFilter: fileFilter }).single("image")
-);
-
-app.use("/images", express.static(path.join(__dirname, "images")));
-
-
 app.use((error, req, res, next) => {
   const status = error.statusCode || 500;
   const message = error.message;
   const data = error.data;
+
+  if (req.file) {
+    fs.unlink(req.file.path, (err) => {
+      console.log(err);
+    });
+  }
 
   res.status(status).json({ message: message, data: data });
 });
@@ -116,44 +117,42 @@ Type.hasMany(Product);
 Type.belongsTo(Category, { constraints: true, onDelete: "RESTRICT" });
 Category.hasMany(Type);
 
-
 Product.belongsTo(Place, { constraints: true, onDelete: "RESTRICT" });
 Place.hasMany(Product);
 
 Type.belongsTo(Place, { constraints: true, onDelete: "RESTRICT" });
 Place.hasMany(Type);
 
-Type.belongsTo(User, {constraints: true, onDelete: "RESTRICT"});
+Type.belongsTo(User, { constraints: true, onDelete: "RESTRICT" });
 User.hasMany(Type);
 
 User.hasOne(Cart);
 Cart.belongsTo(User);
 
-Cart.belongsToMany(Product, { through: CartItem });
-Product.belongsToMany(Cart, { through: CartItem });
+Cart.belongsToMany(Product, { through: { model: CartItem, unique: false } });
+Product.belongsToMany(Cart, { through: { model: CartItem, unique: false } });
 
 Order.belongsTo(User);
-User.hasMany(Order);
+User.hasMany(Order);   
 
-Order.belongsTo(Place, {constraints: true, onDelete: "RESTRICT"});
-Place.hasMany(Order)
+Order.belongsTo(Place, { constraints: true, onDelete: "RESTRICT" });
+Place.hasMany(Order);
 
-Cart.belongsTo(Place, {constraints: true, onDelete: "RESTRICT"});
+Cart.belongsTo(Place, { constraints: true, onDelete: "RESTRICT" });
 Place.hasMany(Cart);
 
-Place.belongsTo(User, {constraints: true, onDelete: "RESTRICT"});
+Place.belongsTo(User, { constraints: true, onDelete: "RESTRICT" });
 User.hasMany(Place);
 
-Order.belongsToMany(Product, { through: OrderItem });
+Order.belongsToMany(Product, { through: { model: OrderItem, unique: false } });
 
 /// End relations
 
 try {
-//sequelize.sync({force: true});
-sequelize.sync();
-} catch (error) {  
+  //sequelize.sync({force: true});
+  sequelize.sync();
+} catch (error) {
   console.log(error);
-}   
-       
-app.listen(8080);  
-  
+}
+
+app.listen(8080);

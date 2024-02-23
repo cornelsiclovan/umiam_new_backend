@@ -135,7 +135,7 @@ exports.login = async (req, res, next) => {
         userId: loadedUser.id,
       },
       "secret",
-      { expiresIn: "1h" }
+      { expiresIn: "24h" }
     );
 
     res
@@ -227,7 +227,7 @@ exports.postReset = async (req, res, next) => {
       .catch((error) => next(error));
 
     res.status(200).json({
-      message: "Pccess your email account to reset your password.",
+      message: "Access your email account to reset your password.",
     });
   } catch (error) {
     next(error);
@@ -258,7 +258,7 @@ exports.postNewPassword = async (req, res, next) => {
     }
 
     if (resetUser.resetToken !== passwordToken) {
-      const error = new Error("This 2 user does not exist");
+      const error = new Error("This user does not exist");
       error.statusCode = 400;
       throw error;
     }

@@ -48,6 +48,10 @@ const User = sequelize.define('user', {
     isEmployee: {
         type: Sequelize.BOOLEAN,
         defaultValue: false
+    },
+    tableId: {
+        type: Sequelize.INTEGER,
+        defaultValue: null
     }
 });
 

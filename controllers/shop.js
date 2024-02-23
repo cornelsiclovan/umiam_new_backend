@@ -8,6 +8,9 @@ const  stripe = require("stripe")(process.env.STRIPE_KEY);
 const PDFDocument = require("pdfkit");
 const OrderItem = require("../models/order-item");
 const Place = require("../models/place");
+const Type = require("../models/type");
+const Category = require("../models/category");
+const CartItem = require("../models/cart-item");
 
 exports.getPlaces = async (req, res, next) => {
   let places = [];
@@ -38,7 +41,7 @@ exports.getProducts = async (req, res, next) => {
   const placeId = req.query.placeId;
 
   const page = +req.query.page || 1;
-  const items_per_page = +req.query.items_per_page || 10;
+  const items_per_page = +req.query.items_per_page || 250;
 
   let queryObject = {};
 
@@ -62,10 +65,32 @@ exports.getProducts = async (req, res, next) => {
     products = await Product.findAll({where: queryObject, offset: page - 1, limit: items_per_page});
     totalItems = products.length;
 
+    let productsToSend = await Promise.all(
+      products.map(async (product) => {
+        let type = await Type.findByPk(product.typeId);
+        let category = await Category.findByPk(product.categoryId);
+
+        return {
+          id: product.id,
+          title: product.title,
+          typeId: product.typeId,
+          description: product.description,
+          createdAt: product.createdAt,
+          updatedAt: product.updatedAt,
+          categoryId: product.categoryId,
+          type: type.title,
+          category : category.title,
+          imageUrl: product.imageUrl,
+          price: product.price,
+          place: product.placeId
+        }
+      })
+    )
+
     res.status(200).json({
       queryObject: queryObject,
       totalItems: totalItems,
-      products: products,
+      products: productsToSend,
     });
   } catch (error) {
     next(error);
@@ -86,9 +111,33 @@ exports.getProduct = async (req, res, next) => {
 
 exports.getCart = async (req, res, next) => {
   try {
-    const user = await User.findByPk(req.userId);
+
+    let user = await User.findOne({where: {tableId: req.query.tableId}});
     
+    if(!user) {
+      user = await User.create({
+        name: req.query.tableId,
+        email: req.query.tableId,
+        password: req.query.tableId,
+        registryToken: req.query.tableId,
+        registryTokenExpiration: req.query.tableId,
+        tableId: req.query.tableId
+      });
+    }
+
+    if(!user) {
+      const error = new Error('Cart is empty');
+      error.statusCode = 401;
+      throw error;
+    }
+
     const cart = await user.getCart();
+
+    if(!cart) {
+      res.status(200).json({
+        productsInCart: [],
+      });
+    }
 
     if(!cart) {
       const error = new Error('Cart is empty');
@@ -109,7 +158,19 @@ exports.postCart = async (req, res, next) => {
   const productId = req.body.productId;
 
   try {
-    const user = await User.findByPk(req.userId);
+    let user = await User.findOne({where: {tableId: req.body.tableId}});
+
+    if(!user) {
+      user = await User.create({
+        name: req.body.tableId,
+        email: req.body.tableId,
+        password: req.body.tableId,
+        registryToken: req.body.tableId,
+        registryTokenExpiration: req.body.tableId,
+        tableId: req.body.tableId
+      });
+
+    }
 
     if (!user) {
       const error = new Error("User doesn't exist!");
@@ -127,12 +188,15 @@ exports.postCart = async (req, res, next) => {
       product = products[0];
     }
 
+
     let newQuantity = 1;
     if (product) {
       const oldQuantity = product.cartItem.quantity;
       newQuantity = oldQuantity + 1;
-      console.log(newQuantity);
+     
     }
+
+   
 
     product = await Product.findByPk(productId);
 
@@ -142,7 +206,18 @@ exports.postCart = async (req, res, next) => {
       throw error;
     }
 
-    await cart.addProduct(product, { through: { quantity: newQuantity } });
+    if(productId !== 111 && productId !==112) {
+      await cart.addProduct(product, { through: { quantity: newQuantity } });
+    } else {
+      await CartItem.create({
+        productId: productId,
+        quantity: 1,
+        cartId: cart.id
+      })
+    }
+
+
+
 
     const productsInCart = await cart.getProducts();
 
@@ -161,12 +236,14 @@ exports.postCart = async (req, res, next) => {
 exports.deleteCartProduct = async (req, res, next) => {
   const productId = req.body.productId;
   try {
-    const user = await User.findByPk(req.userId);
-    const cart = await user.getCart();
-    const products = await cart.getProducts({ where: { id: productId } });
+   // let user = await User.findOne({where: {tableId: req.query.tableId}});
+    // cart = await user.getCart();
+     await CartItem.destroy({ where: { id: productId } });
 
-    console.log(products[0]);
-    products[0].cartItem.destroy();
+
+
+   // console.log(products[0]);
+    //products[0].cartItem.destroy();
 
     res.status(200).json({
       message: "Product delete.",
@@ -196,14 +273,15 @@ exports.getOrders = async (req, res, next) => {
 };
 
 exports.postOrder = async (req, res, next) => {
-
   // for different place add place id at the request
 
   let fetchedCart;
   const total = req.body.total;
+  console.log(req.body);
+  const tableNumber = req.body.tableNumber;
 
   try {
-    const user = await User.findByPk(req.userId);
+    let user = await User.findOne({where: {tableId: req.query.tableId}});
     const cart = await user.getCart();
     if(!cart) {
       const error = new Error("Cart is empty");
@@ -222,10 +300,15 @@ exports.postOrder = async (req, res, next) => {
       throw error;
     }
 
+
     const order = await user.createOrder({
-      total: total
+      total: total,
+      table_id: tableNumber
     });
    
+
+
+
     
     await order.addProducts(
       products.map((product) => {
@@ -247,6 +330,8 @@ exports.postOrder = async (req, res, next) => {
         user: userDetails,
         message: "Order created."
     });
+
+    
   } catch (error) {
     next(error);
   }
@@ -273,6 +358,8 @@ exports.getCheckout = async (req, res, next) => {
     }
 
     const products = cart["products"];
+
+    console.log("checkout");
 
     products.forEach(element => {
       total += element.cartItem.quantity * element.price;

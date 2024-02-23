@@ -14,10 +14,14 @@ const Order = sequelize.define('order', {
         autoIncrement: false,
         allowNull: true,
     },
+    table_id: {
+        type: Sequelize.INTEGER,
+        allowNull: true
+    },
     total: {
         type: Sequelize.FLOAT,
         allowNull: true
-    }
+    },
 });
 
 module.exports = Order;

@@ -1,9 +1,9 @@
 const Product = require("../models/product");
 const { validationResult } = require("express-validator");
-const fileHelper = require("../models/product");
 const Place = require("../models/place");
 const Category = require("../models/category");
 const Type = require("../models/type");
+const { deleteFile } = require("../util/file");
 
 // get products per place 
 exports.getProducts = async (req, res, next) => {
@@ -34,12 +34,31 @@ exports.getProducts = async (req, res, next) => {
 
     totalItems = products.length;
 
+    let producsToSend = await Promise.all(
+      products.map(async (product) => {
+        let type = await Type.findById(product.typeId);
+        let category = await Category.findById(product.categoryId);
+
+        return {
+          title: product.title,
+          typeId: product.typeId,
+          categoryId: product.categoryId,
+          type: type.title,
+          category : category.title,
+          image: product.imageUrl,
+          price: product.price,
+          place: product.placeId
+        }
+      })
+    )
+  
+
     res.status(200).json({
-      products: products,
+      products: producsToSend,
       totalItems: totalItems
     });
   } catch (error) {
-    next(error);
+    next(error); 
   }
 };
 
@@ -65,16 +84,10 @@ exports.getProduct = async (req, res, next) => {
 };
 
 exports.createProduct = async (req, res, next) => {
-  const errors = validationResult(req);
+  console.log(req.files);
+  //console.log(req.files["image"][0].path)
 
   try {
-    if (!errors.isEmpty()) {
-      const error = new Error("Validation failed, entered data is incorrect.");
-      error.status = 422;
-      error.data = errors.array();
-      throw error;
-    }
-
     const place = await Place.findByPk(req.body.placeId);
 
     if(place.userId !== req.userId) {
@@ -120,27 +133,23 @@ exports.createProduct = async (req, res, next) => {
     //     throw error;
     // }
 
+    if(!req.files["image"]) {
+      const error = new Error("No file available");
+      error.statusCode = 400;
+      throw error
+    }
 
+    const title = req.body.title;
+    const price = req.body.price;
+    const description = req.body.description;
+    const placeId = req.body.placeId;
+    const categoryId = req.body.categoryId;
+    const typeId = req.body.typeId;
 
-  } catch (error) {
-    next(error);
-    return;
-  }
-
-
-  const title = req.body.title;
-  const imageUrl = req.body.imageUrl;
-  const price = req.body.price;
-  const description = req.body.description;
-  const placeId = req.body.placeId;
-  const categoryId = req.body.categoryId;
-  const typeId = req.body.typeId;
-
-  try {
     const product = await Product.create({
       title: title,
       price: price,
-      imageUrl: imageUrl,
+      imageUrl: req.files["image"][0].path,
       description: description,
       userId: req.userId,
       placeId: placeId,
@@ -148,28 +157,23 @@ exports.createProduct = async (req, res, next) => {
       typeId: typeId
     });
 
+    product.dataValues.type = type.title;
+    product.dataValues.category = category.title;
+
     res.status(200).json({
       product: product,
     });
   } catch (error) {
-    if (!error.statusCode) {
-      error.statusCode = 404;
-    }
     next(error);
+    return;
   }
 };
 
 exports.editProduct = async (req, res, next) => {
-  const productId = req.params.productId;
-  const errors = validationResult(req);
-
+  const productId = req.params.productId; 
+  console.log(req.files["image"]);
   try {
-    if (!errors.isEmpty()) {
-      const error = new Error("Validation failed, entered data is incorrect.");
-      error.statusCode = 422;
-      throw error;
-    }
-
+   
     const product = await Product.findByPk(productId);
 
     if (!product) {
@@ -194,12 +198,6 @@ exports.editProduct = async (req, res, next) => {
     }
 
 
-    if(type.placeId !== place.id) {
-      const error = new Error("The type is not from the selected place");
-      error.statusCode = 400;
-      throw error;
-    } 
-
     const category = await Category.findByPk(req.body.categoryId);
 
     
@@ -218,21 +216,35 @@ exports.editProduct = async (req, res, next) => {
 
     const updatedTitle = req.body.title;
     const updatedPrice = req.body.price;
-    const updatedImageUrl = req.body.imageUrl;
     const updatedDescription = req.body.description;
     const updatedTypeId = req.body.typeId;
     const updatedCategoryId = req.body.categoryId;
     const updatedPlaceId = req.body.placeId;
 
+    let image;
+
+    if(req.files["image"]) {
+      image = req.files["image"][0].path;
+    } else {
+      image = product.imageUrl;
+    }
+
+    
+
     product.title = updatedTitle;
     product.price = updatedPrice;
-    product.imageUrl = updatedImageUrl;
+    product.imageUrl = image;
     product.description = updatedDescription;
     product.typeId = updatedTypeId;
     product.categoryId = updatedCategoryId;
     product.placeId = updatedPlaceId;
 
     await product.save();
+    console.log(product);
+
+    product.dataValues.type = type.title;
+    product.dataValues.category = category.title;
+    console.log(type.title);
 
     res.status(200).json({
       product: product,
@@ -247,6 +259,7 @@ exports.editProduct = async (req, res, next) => {
 
 exports.deleteProduct = async (req, res, next) => {
   const productId = req.params.productId;
+  console.log(productId);
   try {
     const product = await Product.findByPk(productId);
 
@@ -262,7 +275,7 @@ exports.deleteProduct = async (req, res, next) => {
       throw error;
     }
 
-    fileHelper.deleteFile(product.imageUrl);
+    deleteFile(product.imageUrl);
 
     await product.destroy();
 
@@ -303,8 +316,7 @@ exports.getPlaces = async (req, res, next) => {
 
 exports.getPlace = async (req, res, next) => {
   const placeId = req.params.placeId;
-  
-  console.log(req.userId);
+
   
   try {
     const place = await Place.findByPk(placeId);
@@ -684,8 +696,27 @@ exports.getTypes = async (req, res, next) => {
       throw error;
     }
 
+
+    let typesToSend = await Promise.all(
+      types.map(async(type) => {
+        let category = await Category.findAll({'where': {id: type.categoryId}});
+        console.log(category[0].title);
+
+        return {
+          id: type.id,
+          title: type.title,
+          categoryId: type.categoryId,
+          category: category[0].title,
+          description: type.description,
+          createdAt: type.createdAt,
+          updatedAt: type.updatedAt,
+        }
+      })
+    );
+    
+
     res.status(200).json({
-      types: types,
+      types: typesToSend,
       totalItems: types.length
     })
 
@@ -705,6 +736,7 @@ exports.getType = async (req, res, next) => {
       error.statusCode = 400;
       throw error;
     }
+
 
     res.status(200).json({
       type: type
@@ -769,6 +801,7 @@ exports.addType = async (req, res, next) => {
       throw error;
     }
 
+
     const type = await Type.create({
       title: title,
       description: description,
@@ -776,6 +809,11 @@ exports.addType = async (req, res, next) => {
       placeId: placeId,
       categoryId: categoryId
     });
+
+    
+   
+    type.dataValues.category = category.title;
+
 
     res.status(200).json({
       type: type
@@ -858,6 +896,8 @@ exports.editType = async (req, res, next) => {
 
     await type.save();
     
+    type.dataValues.category = category.title;
+
 
 
     // const type = await Type.create({
