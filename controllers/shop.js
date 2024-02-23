@@ -306,9 +306,6 @@ exports.postOrder = async (req, res, next) => {
       table_id: tableNumber
     });
    
-
-
-
     
     await order.addProducts(
       products.map((product) => {
