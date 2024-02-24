@@ -156,6 +156,7 @@ exports.getCart = async (req, res, next) => {
 
 exports.postCart = async (req, res, next) => {
   const productId = req.body.productId;
+  const fishWeight = req.body.fishWeight;
 
   try {
     let user = await User.findOne({where: {tableId: req.body.tableId}});
@@ -200,6 +201,7 @@ exports.postCart = async (req, res, next) => {
 
     product = await Product.findByPk(productId);
 
+
     if(!product) {
       const error = new Error("Product does not exist");
       error.statusCode = 404;
@@ -211,7 +213,7 @@ exports.postCart = async (req, res, next) => {
     } else {
       await CartItem.create({
         productId: productId,
-        quantity: 1,
+        quantity: fishWeight || 1,
         cartId: cart.id
       })
     }
