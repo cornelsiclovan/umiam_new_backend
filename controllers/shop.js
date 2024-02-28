@@ -323,7 +323,6 @@ exports.postOrder = async (req, res, next) => {
       email: user.email
     }
 
-
     res.status(200).json({
         order: order,
         user: userDetails,
