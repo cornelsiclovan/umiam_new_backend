@@ -4,6 +4,7 @@ const Place = require("../models/place");
 const Category = require("../models/category");
 const Type = require("../models/type");
 const { deleteFile } = require("../util/file");
+const Order = require("../models/order");
 
 // get products per place 
 exports.getProducts = async (req, res, next) => {
@@ -943,8 +944,23 @@ exports.deleteType = async (req, res, next) => {
     })
 
   } catch(error) {  
-
+    next(error);
   }
 }
 
 //// END TYPE
+
+exports.getOrders = async (req, res, next) => {
+  let orders = [];
+  
+  try {
+     orders = await Order.findAll({limit: 200, order: [['id', 'DESC']]});
+
+     res.status(200).json({
+      totalItems: orders.length,
+      orders: orders
+     })
+  } catch (error) {
+    next(error)
+  }
+}

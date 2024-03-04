@@ -144,4 +144,6 @@ router.delete("/types/:typeId", isAuth, isOwner, adminController.deleteType);
 
 // END TYPE ROUTES
 
+router.get("/orders", isAuth, adminController.getOrders);
+
 module.exports = router;
