@@ -11,6 +11,7 @@ const Place = require("../models/place");
 const Type = require("../models/type");
 const Category = require("../models/category");
 const CartItem = require("../models/cart-item");
+const Cart = require("../models/cart");
 
 exports.getPlaces = async (req, res, next) => {
   let places = [];
@@ -108,6 +109,43 @@ exports.getProduct = async (req, res, next) => {
     next(error);
   }
 };
+
+exports.getCarts = async (req, res, next) => {
+  
+  try {
+    const carts = await Cart.findAll();
+    let prods = [];
+    const cartsToSend = await Promise.all(carts.map( async cart => {
+      const user = await User.findByPk(cart.userId)
+     
+      prods = await cart.getProducts();
+      //console.log(prods.length);
+   
+      let username = "";
+      if(user) {
+        username = user.name;
+      }
+      if(prods && prods.length === 0) {
+        return {
+          tableId: username,
+          empty: true
+        }
+      }else {
+        return {
+          tableId: username || "",
+          empty: false
+        }
+      }
+    }))
+
+    res.status(200).json({
+      carts: cartsToSend,
+    });
+    
+  } catch(error) {
+    next(error);
+  }
+}
 
 exports.getCart = async (req, res, next) => {
   try {
