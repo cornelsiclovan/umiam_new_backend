@@ -4,7 +4,7 @@ const Product = require("../models/product");
 const User = require("../models/user");
 const Order = require("../models/order");
 const e = require("express");
-const  stripe = require("stripe")(process.env.STRIPE_KEY);
+const stripe = require("stripe")(process.env.STRIPE_KEY);
 const PDFDocument = require("pdfkit");
 const OrderItem = require("../models/order-item");
 const Place = require("../models/place");
@@ -22,19 +22,19 @@ exports.getPlaces = async (req, res, next) => {
 
     totalItems = places.length;
 
-    if(!places || places.length === 0) {
+    if (!places || places.length === 0) {
       const error = new Error("No places are available for your request");
       throw error;
-    } 
+    }
 
     res.status(200).json({
       places: places,
-      totalItems: totalItems
+      totalItems: totalItems,
     });
   } catch (error) {
     next(error);
   }
-}
+};
 
 exports.getProducts = async (req, res, next) => {
   const typeId = req.query.typeId;
@@ -46,24 +46,27 @@ exports.getProducts = async (req, res, next) => {
 
   let queryObject = {};
 
-  if(placeId) {
+  if (placeId) {
     queryObject.placeId = placeId;
   }
 
-  if(typeId) {
+  if (typeId) {
     queryObject.typeId = typeId;
   }
 
-  if(categoryId) {
+  if (categoryId) {
     queryObject.categoryId = categoryId;
   }
-
 
   let products = [];
   let totalItems = 0;
 
   try {
-    products = await Product.findAll({where: queryObject, offset: page - 1, limit: items_per_page});
+    products = await Product.findAll({
+      where: queryObject,
+      offset: page - 1,
+      limit: items_per_page,
+    });
     totalItems = products.length;
 
     let productsToSend = await Promise.all(
@@ -80,13 +83,13 @@ exports.getProducts = async (req, res, next) => {
           updatedAt: product.updatedAt,
           categoryId: product.categoryId,
           type: type.title,
-          category : category.title,
+          category: category.title,
           imageUrl: product.imageUrl,
           price: product.price,
-          place: product.placeId
-        }
+          place: product.placeId,
+        };
       })
-    )
+    );
 
     res.status(200).json({
       queryObject: queryObject,
@@ -111,74 +114,73 @@ exports.getProduct = async (req, res, next) => {
 };
 
 exports.getCarts = async (req, res, next) => {
-  
   try {
     const carts = await Cart.findAll();
     let prods = [];
-    const cartsToSend = await Promise.all(carts.map( async cart => {
-      const user = await User.findByPk(cart.userId)
-     
-      prods = await cart.getProducts();
-      //console.log(prods.length);
-   
-      let username = "";
-      if(user) {
-        username = user.name;
-      }
-      if(prods && prods.length === 0) {
-        return {
-          tableId: username,
-          empty: true
+    const cartsToSend = await Promise.all(
+      carts.map(async (cart) => {
+        const user = await User.findByPk(cart.userId);
+
+        prods = await cart.getProducts();
+        //console.log(prods.length);
+
+        let username = "";
+        if (user) {
+          username = user.name;
         }
-      }else {
-        return {
-          tableId: username || "",
-          empty: false
+        if (prods && prods.length === 0) {
+          return {
+            tableId: username,
+            empty: true,
+          };
+        } else {
+          return {
+            tableId: username || "",
+            empty: false,
+          };
         }
-      }
-    }))
+      })
+    );
 
     res.status(200).json({
       carts: cartsToSend,
     });
-    
-  } catch(error) {
+  } catch (error) {
     next(error);
   }
-}
+};
 
 exports.getCart = async (req, res, next) => {
   try {
+    let user = await User.findOne({ where: { tableId: req.query.tableId } });
 
-    let user = await User.findOne({where: {tableId: req.query.tableId}});
-    
-    if(!user) {
+    if (!user) {
       user = await User.create({
         name: req.query.tableId,
         email: req.query.tableId,
         password: req.query.tableId,
         registryToken: req.query.tableId,
         registryTokenExpiration: req.query.tableId,
-        tableId: req.query.tableId
+        tableId: req.query.tableId,
       });
     }
 
-    if(!user) {
-      const error = new Error('Cart is empty');
+    if (!user) {
+      const error = new Error("Cart is empty");
       error.statusCode = 401;
       throw error;
     }
 
     const cart = await user.getCart();
 
-    if(!cart) {
+    if (!cart) {
       res.status(200).json({
         productsInCart: [],
       });
     }
 
-    if(!cart) {
-      const error = new Error('Cart is empty');
+    if (!cart) {
+      const error = new Error("Cart is empty");
       error.statusCode = 401;
       throw error;
     }
@@ -197,18 +199,17 @@ exports.postCart = async (req, res, next) => {
   const fishWeight = req.body.fishWeight;
 
   try {
-    let user = await User.findOne({where: {tableId: req.body.tableId}});
+    let user = await User.findOne({ where: { tableId: req.body.tableId } });
 
-    if(!user) {
+    if (!user) {
       user = await User.create({
         name: req.body.tableId,
         email: req.body.tableId,
         password: req.body.tableId,
         registryToken: req.body.tableId,
         registryTokenExpiration: req.body.tableId,
-        tableId: req.body.tableId
+        tableId: req.body.tableId,
       });
-
     }
 
     if (!user) {
@@ -227,43 +228,40 @@ exports.postCart = async (req, res, next) => {
       product = products[0];
     }
 
-
     let newQuantity = 1;
     if (product) {
       const oldQuantity = product.cartItem.quantity;
       newQuantity = oldQuantity + 1;
-     
     }
-
-   
 
     product = await Product.findByPk(productId);
 
-
-    if(!product) {
+    if (!product) {
       const error = new Error("Product does not exist");
       error.statusCode = 404;
       throw error;
     }
 
-    if(productId !== 111 && productId !==112) {
+    if (
+      productId !== 111 &&
+      productId !== 112 &&
+      productId !== 103 &&
+      productId !== 104
+    ) {
       await cart.addProduct(product, { through: { quantity: newQuantity } });
     } else {
       await CartItem.create({
         productId: productId,
         quantity: fishWeight || 1,
-        cartId: cart.id
-      })
+        cartId: cart.id,
+      });
     }
-
-
-
 
     const productsInCart = await cart.getProducts();
 
     res.status(200).json({
       message: "Product added to cart.",
-      productsInCart: productsInCart
+      productsInCart: productsInCart,
     });
   } catch (error) {
     if (!error.statusCode) {
@@ -276,13 +274,11 @@ exports.postCart = async (req, res, next) => {
 exports.deleteCartProduct = async (req, res, next) => {
   const productId = req.body.productId;
   try {
-   // let user = await User.findOne({where: {tableId: req.query.tableId}});
+    // let user = await User.findOne({where: {tableId: req.query.tableId}});
     // cart = await user.getCart();
-     await CartItem.destroy({ where: { id: productId } });
+    await CartItem.destroy({ where: { id: productId } });
 
-
-
-   // console.log(products[0]);
+    // console.log(products[0]);
     //products[0].cartItem.destroy();
 
     res.status(200).json({
@@ -294,20 +290,20 @@ exports.deleteCartProduct = async (req, res, next) => {
 };
 
 exports.getOrders = async (req, res, next) => {
-  const user =  await User.findByPk(req.userId);
+  const user = await User.findByPk(req.userId);
   try {
-    const orders = await user.getOrders({include: ['products']});
+    const orders = await user.getOrders({ include: ["products"] });
 
-    if(!orders || orders.length === 0) {
+    if (!orders || orders.length === 0) {
       const error = new Error("No orders yet");
       error.statusCode = 400;
-      throw(error);
+      throw error;
     }
 
     res.status(200).json({
-      orders: orders
+      orders: orders,
     });
-  } catch(error) {
+  } catch (error) {
     next(error);
   }
 };
@@ -321,9 +317,9 @@ exports.postOrder = async (req, res, next) => {
   const tableNumber = req.body.tableNumber;
 
   try {
-    let user = await User.findOne({where: {tableId: req.query.tableId}});
+    let user = await User.findOne({ where: { tableId: req.query.tableId } });
     const cart = await user.getCart();
-    if(!cart) {
+    if (!cart) {
       const error = new Error("Cart is empty");
       error.statusCode = 404;
       throw error;
@@ -331,22 +327,19 @@ exports.postOrder = async (req, res, next) => {
 
     fetchedCart = cart;
 
-
     const products = await cart.getProducts();
 
-    if(products.length === 0) {
+    if (products.length === 0) {
       const error = new Error("Cart is empty");
       error.statusCode = 404;
       throw error;
     }
 
-
     const order = await user.createOrder({
       total: total,
-      table_id: tableNumber
+      table_id: tableNumber,
     });
-   
-    
+
     await order.addProducts(
       products.map((product) => {
         product.orderItem = { quantity: product.cartItem.quantity };
@@ -358,16 +351,14 @@ exports.postOrder = async (req, res, next) => {
 
     const userDetails = {
       name: user.name,
-      email: user.email
-    }
+      email: user.email,
+    };
 
     res.status(200).json({
-        order: order,
-        user: userDetails,
-        message: "Order created."
+      order: order,
+      user: userDetails,
+      message: "Order created.",
     });
-
-    
   } catch (error) {
     next(error);
   }
@@ -379,16 +370,16 @@ exports.getCheckout = async (req, res, next) => {
   try {
     const user = await User.findByPk(req.userId);
 
-    if(!user) {
-      const error = new Error('User does not exist!');
+    if (!user) {
+      const error = new Error("User does not exist!");
       error.statusCode = 404;
       throw error;
     }
 
-    const cart = await user.getCart({include: ['products']});
+    const cart = await user.getCart({ include: ["products"] });
 
-    if(!cart || cart.products.length === 0) {
-      const error = new Error('Cart is empty');
+    if (!cart || cart.products.length === 0) {
+      const error = new Error("Cart is empty");
       error.statusCode = 404;
       throw error;
     }
@@ -397,12 +388,11 @@ exports.getCheckout = async (req, res, next) => {
 
     console.log("checkout");
 
-    products.forEach(element => {
+    products.forEach((element) => {
       total += element.cartItem.quantity * element.price;
       console.log(element.quantity);
     });
 
-    
     //// payment code //////
     //// STRYPE EXAMPLE ////
 
@@ -424,10 +414,9 @@ exports.getCheckout = async (req, res, next) => {
     //// END PAYMENT ///////
 
     res.status(200).json({
-      message: "payment process started"
+      message: "payment process started",
     });
-
-  } catch(error) {
+  } catch (error) {
     next(error);
   }
 };
@@ -436,7 +425,7 @@ exports.getCheckoutSuccess = async (req, res, next) => {
   try {
     const user = await User.findByPk(req.userId);
     const cart = await user.getCart();
-    if(!cart) {
+    if (!cart) {
       const error = new Error("Cart is empty");
       error.statusCode = 404;
       throw error;
@@ -444,10 +433,9 @@ exports.getCheckoutSuccess = async (req, res, next) => {
 
     fetchedCart = cart;
 
-
     const products = await cart.getProducts();
 
-    if(products.length === 0) {
+    if (products.length === 0) {
       const error = new Error("Cart is empty");
       error.statusCode = 404;
       throw error;
@@ -463,30 +451,27 @@ exports.getCheckoutSuccess = async (req, res, next) => {
 
     await fetchedCart.setProducts(null);
 
-
     res.status(200).json({
-        message: "Order created."
+      message: "Order created.",
     });
-   
-  } catch(error) {
+  } catch (error) {
     next(error);
   }
 };
-
 
 exports.getInvoice = async (req, res, next) => {
   const orderId = req.params.orderId;
 
   try {
-    const order = await Order.findByPk(orderId, {include: ["products"]});
-   
-    if(!order) {
+    const order = await Order.findByPk(orderId, { include: ["products"] });
+
+    if (!order) {
       const error = new Error("Order does not exist");
       error.statusCode = 400;
       throw error;
     }
 
-    if(order.userId.toString() !== req.userId.toString()) {
+    if (order.userId.toString() !== req.userId.toString()) {
       const error = new Error("Unauthorized!");
       error.statusCode = 403;
       throw error;
@@ -496,7 +481,7 @@ exports.getInvoice = async (req, res, next) => {
     const invoicePath = path.join("data", "invoices", invoiceName);
 
     const pdfdoc = new PDFDocument();
-   
+
     pdfdoc.pipe(fs.createWriteStream(invoicePath));
     pdfdoc.pipe(res);
     pdfdoc.fontSize(26).text("invoice", { underline: true });
@@ -504,42 +489,41 @@ exports.getInvoice = async (req, res, next) => {
 
     let totalPrice = 0;
 
-    order.products.forEach(product => {
+    order.products.forEach((product) => {
       totalPrice = totalPrice + product.orderItem.quantity * product.price;
-    
-      pdfdoc.fontSize(14).text(
-        product.title +
-        " - " +
-        product.orderItem.quantity +
-        " x " +
-        product.orderItem.price
-      );
-    })
+
+      pdfdoc
+        .fontSize(14)
+        .text(
+          product.title +
+            " - " +
+            product.orderItem.quantity +
+            " x " +
+            product.orderItem.price
+        );
+    });
 
     pdfdoc.text("-------");
     pdfdoc.fontSize(20).text("Total Price: $" + totalPrice);
     pdfdoc.end();
-    
+
     fs.readFile(invoicePath, (err, data) => {
-      if(err) {
+      if (err) {
         throw err;
       }
-      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader("Content-Type", "application/pdf");
       res.setHeader(
-        'Content-Disposition',
+        "Content-Disposition",
         'inline; filename="' + invoiceName + '"'
       );
 
       res.status(200).send(data);
-
     });
 
     // res.status(200).json({
     //   order: order
     // });
-  } catch(error) {
+  } catch (error) {
     next(error);
   }
-  
-
 };
